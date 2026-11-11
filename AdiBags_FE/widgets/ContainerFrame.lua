@@ -664,11 +664,11 @@ end
 
 function containerProto:OnHide()
 	if addon.isForever and InCombatLockdown() then
-		-- Hiding a secured parent is handled by the secure key binding.
-		-- Do not schedule layout changes until combat finishes.
+		-- Keep PLAYER_REGEN_ENABLED alive until combat ends. UnregisterAllEvents()
+		-- here would discard the deferred refresh registered by OnShow.
 		self:PauseUpdates()
-		self:UnregisterAllEvents()
-		self:UnregisterAllMessages()
+		self.foreverDeferredUpdate = true
+		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'ForeverRefreshAfterCombat')
 		return
 	end
 	if self.isReagentBank then
@@ -1173,6 +1173,11 @@ function containerProto:ForeverRefreshAfterCombat()
 		-- The initial combat OnShow intentionally skipped initialization.
 		if self.paused then self:ResumeUpdates() else self:RefreshContents() end
 		self:RequestLayout()
+	else
+		-- Normal OnHide removes these subscriptions. During combat that
+		-- cleanup is delayed so the post-combat event can still arrive.
+		self:UnregisterAllEvents()
+		self:UnregisterAllMessages()
 	end
 end
 
