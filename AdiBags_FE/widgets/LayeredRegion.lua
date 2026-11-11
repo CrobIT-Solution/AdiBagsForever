@@ -106,6 +106,9 @@ function layeredRegionProto:AddWidget(widget, ...)
 end
 
 function layeredRegionProto:Layout()
+	-- Wait until combat is over before moving/resizing secured descendants.
+	-- Keep OnUpdate installed so the pending layout runs after combat.
+	if addon.isForever and InCombatLockdown() then return end
 	local wasDirty = self.dirtyLayout
 	self.dirtyLayout = nil
 	for i, data in pairs(self.widgets) do

@@ -1,35 +1,52 @@
-# AdiBagsForever v0.1.9 r1 – First public release (2026-11-09)
+## b0.1.10 r11 - Diagnose /reload (Testversion)
 
-**Target:** World of Warcraft: Forever 1.60.1 (interface 16001)
-**Release basis:** b0.1.9 r1 beta, which itself used the player-tested a0.1.8 r4 gameplay Lua source.
+- Kein neuer Combat-/X-/ESC-Handler; keine Änderungen an Inventar-, Bank- oder Händlerverhalten.
+- Ein kleiner Fehler bei der Erfassung einer zweiten Tastenbelegung ist korrigiert.
+- /abfcombatdebug zeigt tatsächliche Bindungen und Startzustand nach Reload an.
+- Ingame-Test erforderlich; Veröffentlichung auf CurseForge noch nicht vorgesehen.
 
-## Features
+## b0.1.10 r10 – Reload-Wiederherstellung (Testversion)
 
-- Categorized inventory and item search.
-- Separate categorized character-bank view while preserving the original Blizzard bank.
-- Minimap button opens settings only.
-- Bind-on-Equip (BoE), Bind-on-Pickup (BoP), unworn and previously equipped categorization, tracked per item GUID.
-- Safe right-click handling for item use tested in-game with a consumable.
+- Rebind des bestehenden sicheren B-Kampfhandlers nach PLAYER_ENTERING_WORLD.
+- Funktional sonst identisch zum bestaetigten r8-Stand.
+- ESC, X und Leisten-Button im Kampf weiterhin offen.
+- Ingame-Test nach /reload erforderlich. Keine CurseForge-Aktualisierung.
 
-## Changes since b0.1.9 r1
+## b0.1.10 r8 – Regression-Rollback (Testversion)
 
-- Promoted to **Release** distribution channel (the CurseForge file release type is set by the uploader).
-- Unified the in-game titles (`AdiBags_Forever_v0.1.9`) and TOC versions (`0.1.9`).
-- Updated release documentation and regenerated SHA-256 checksum manifest.
-- **No changes to Lua game logic.**
+- In r7 eingefuehrte sichere ESC-, X- und Taschenleisten-Eingriffe zurueckgenommen, da nach r7 laut Ingame-Test B im Kampf nicht mehr oeffnet.
+- Nur das `core/Bags.lua`-Verhalten aus dem zuvor fuer B im Kampf bestaetigten r6-Stand wiederhergestellt.
+- Kein Eingriff in Item-Buttons, Haendler, Spielerhandel, Bank, Minimap oder gespeicherte Einstellungen.
+- ESC/X/Taschenleisten-Button im Kampf bleiben offen; diese Revision behebt nur den Rueckschritt bei B.
+- Ingame-Verifikation von r8 weiterhin erforderlich; keine CurseForge-Veröffentlichung.
 
-## Known limitations / beta feedback still wanted
+## b0.1.10 r7 – Kampftasche: Schliessen und Taschenleisten-Button (Test)
 
-- A bag item dragged into the normal Blizzard bank works; right-click may try to equip it instead of depositing it. Use drag-and-drop for bags.
-- Bank sort/search and account/warband-bank interactions have not been fully verified in game.
-- BoE/BoP equipment history and combat-related interaction edge cases still need more in-game testing.
-- CurseForge client installation of both included folders must be verified after publishing.
+- Bereits funktionierende B-Kampftaste unveraendert.
+- ESC ueber Blizzard UISpecialFrames registriert (Ingame-Verifikation offen).
+- X und Blizzard-Taschenleistenbutton erhalten vorbereitete Secure-Handler-Wrappers, wenn deren Frames im Client geschuetzt sind.
+- Keine globale ESC-Uebersteuerung; Abschaltung verhindert weitere Wrapper-Aktionen.
+- Noch NICHT bei CurseForge hochladen: zuerst Ingame-Regressionstests.
 
-## Installation
+# AdiBagsForever b0.1.10 r2 – Test (not published)
 
-The ZIP has two folders at its root: `AdiBags_FE` and `AdiBags_FE_Config`.
-Extract both directly to `_forever_/Interface/AddOns`, or use CurseForge after the app install behavior has been verified. Do not remove your SavedVariables during upgrades.
+**Target:** WoW Forever 1.60.1 (interface 16001)
 
-## Licensing and authorship
+Fixes based on r1 in-game feedback:
+- Defers secure combat bag prewarm to the next UI tick, after Ace filter modules initialize.
+- Guards the Junk filter against uninitialized preferences during early scans.
+- Switches off secure item-equipping right-click actions while a merchant is open (outside combat).
+- Uses a deliberate player right-click to pick up a sellable bag item and place it on the merchant using the public cursor API. Does not bulk-sell or override protected UseContainerItem.
+- Normal right-click item use outside merchants, left-click pickup, bank handling and secure combat-bag key logic retained.
 
-Current maintainer: Blackiron. Based on AdiBags by Adirelle and AdiBagsEx, with prior contributions from Talyrius, elemstream, and others. See `CREDITS.md`, `LICENSE` (GPLv3 or later), `LICENSES.md`, and bundled library notices.
+**Must be tested in-game:** merchant sale of a non-equipped item (including wearable equipment and stacked goods), item use after merchant closes, bag opening while in combat, no BugSack errors.
+
+**Known limitations:** the merchant cursor-selling API path is unconfirmed on Forever and may leave an item on the cursor if the client rejects the sale; in that case put the item back manually. No auto-junk selling, and bank-bag right-click is still limited. Do not test with valuable items. The public CurseForge v0.1.9 r1 is unchanged.
+
+## b0.1.10 r3 – Händler-Rechtsklick (Testversion)
+
+- Fix für nicht verkaufbare Rüstungsgegenstände in der eigenen Taschenansicht: ausdrücklich inaktive sichere Rechtsklick-Aktion am Händler (`type2=none` statt `nil`).
+- Tatsächlich geöffnetes Händlerfenster wird direkt vor dem Klick überprüft.
+- Die Händler-Ereignisabonnements pro Gegenstands-Button sind entfallen; das verringert die Komplexität.
+- Kein automatischer Gegenstandsverkauf und keine Veränderung von Blizzards geschützten Funktionen.
+- **Nicht im Spiel bestätigt**: Verkauf tragbarer Ausrüstung über den Cursor-Verkaufsweg. Unveränderte öffentliche Version v0.1.9 r1.

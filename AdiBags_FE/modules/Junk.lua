@@ -111,6 +111,8 @@ function mod:OnDisable()
 end
 
 function mod:BaseCheckItem(itemId, force)
+	-- The combat-key prewarm can briefly run before this Ace module is enabled.
+	if not prefs then return false end
 	local _, _, quality, _, _, class, subclass = GetItemInfo(itemId)
 	if ((force or prefs.sources.lowQuality) and quality == ITEM_QUALITY_POOR)
 		or ((force or prefs.sources.junkCategory) and quality and quality < ITEM_QUALITY_UNCOMMON and (class == JUNK or subclass == JUNK)) then
@@ -124,6 +126,9 @@ function mod:ExtendedCheckItem(itemId, force)
 end
 
 function mod:CheckItem(itemId)
+	-- No filter result is safe until OnEnable initializes the namespace.
+	-- OnEnable clears the cache so early results will be rescanned.
+	if not prefs then return false end
 	if not itemId then
 		return false
 	elseif not GetItemInfo(itemId) then

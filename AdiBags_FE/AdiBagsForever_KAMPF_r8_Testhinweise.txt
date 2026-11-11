@@ -1,0 +1,23 @@
+AdiBagsForever b0.1.10 r8 – Regression-Rollback von r7
+
+WICHTIG: Dies ist ein vollstaendiges Addonpaket mit beiden Ordnern.
+
+- Die in r7 neu eingebauten Kampf-Wrappers (ESC, X, Blizzard-Taschenleiste)
+  und RegisterStateDriver-Integration wurden komplett entfernt, weil seit r7
+  laut Ingame-Test auch B im Kampf nicht mehr funktioniert.
+- Die Kampftasten-Implementierung aus r6 wurde bytegenau wiederhergestellt.
+  Dort funktionierte B im Kampf beim Ingame-Test.
+- Andere Spielfunktionen bleiben unveraendert gegenueber r7.
+
+ERWARTUNG / EINSCHRAENKUNGEN:
+- B im Kampf sollte wieder wie in r6 funktionieren (neuer Ingame-Test erforderlich).
+- ESC, X und der Blizzard-Taschenleisten-Button sind im Kampf NICHT repariert.
+- Weitere bekannte Einschraenkungen (Haendler, Handel, Bank-Taschen) bleiben offen.
+- Kein Update fuer CurseForge: Nur lokale Testversion.
+
+TEST:
+1) Beide Addon-Ordner nach Backup tauschen, SavedVariables behalten.
+2) Ohne Kampf: B oeffnet/schliesst Tasche.
+3) Im Kampf: B oeffnet/schliesst Tasche; BugSack beobachten.
+4) Fehlende ESC/X/Leisten-Bedienung nicht als neu aufgetretenen Fehler werten.
+5) Falls auch B nicht geht: /abfcombatdebug im Kampf ausgeben.

@@ -1,4 +1,4 @@
-# AdiBagsForever – WoW Forever (v0.1.9 r1, erste öffentliche Release-Version)
+# AdiBagsForever – WoW Forever (b0.1.10 r1, Kampf-Funktionstest)
 
 **Maintainer:** Blackiron. **Based on:** AdiBags by Adirelle, later AdiBagsEx and further contributors. See `CREDITS.md`, `LICENSE`, and `LICENSES.md` for authorship and terms.
 
@@ -19,7 +19,9 @@
 
 - **Taschen als Gegenstand:** Drag-and-drop mit linker Maustaste in die Blizzard-Bank funktioniert im Test. Rechtsklick kann dagegen einen Ausrüstungsversuch auslösen (Meldung „Es gibt keinen Ausrüstungsplatz für diesen Gegenstand“). Für Taschen in der Bank bitte vorerst Drag-and-drop verwenden.
 - Bank-Suche, Bank-Sortierung und Account-/Kriegsmeutenbank sind noch nicht umfassend getestet bzw. nicht vollständig portiert. Keine wertvollen Gegenstände für ungetestete Aktionen verwenden.
-- BoE-/BoP-Tragehistorie, Profilpersistenz nach Neustart und Kampfsicherheit benötigen weitere Ingame-Tests.
+- BoE-/BoP-Tragehistorie und Profilpersistenz nach Neustart benötigen weitere Ingame-Tests.
+- **Kampftest neu:** Ein sicherer Tastenhandler öffnet/schließt die bereits vorbereitete Taschenansicht im Kampf. Die Inhalte bleiben bis zum Kampfende eingefroren; neue/verschobene Items werden danach aktualisiert. Vor dem öffentlichen Update muss dieser Ablauf in WoW Forever getestet werden.
+- Der Minimap-Button bleibt ausschließlich für Einstellungen. MBB-Integration ist ein separater offener Punkt.
 - Die Bank-Ansicht ist eine **zusätzliche** Oberfläche; die originale Blizzard-Bank bleibt als Rückfallmöglichkeit sichtbar.
 
 ## Installation

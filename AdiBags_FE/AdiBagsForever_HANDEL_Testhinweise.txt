@@ -1,0 +1,18 @@
+AdiBagsForever b0.1.10 r5 -- gezielter Handelstest
+
+Aenderungen: nur widgets/ItemButton.lua funktional, zusaetzlich Versionsmetadaten.
+Beim geoeffneten Spielerhandel oder Haendler ist die sichere Ausruestungsaktion
+auf Rechtsklick gesperrt. Spielerhandel: Ein Rechtsklick versucht, mit Blizzards
+PickupContainerItem / ClickTradeButton genau einen Gegenstand in den ersten freien
+Handelsslot 1-6 zu legen. Die Bestaetigung des Handels erfolgt weiterhin manuell.
+Die Handelsaktion wird nicht im Kampf ausgefuehrt.
+Falls der Client diese API nicht bereitstellt, bleibt Drag-and-drop moeglich.
+
+Ingame-Test: 1) Ausruestung bei geoeffnetem Handel rechtsklicken -- nicht anlegen.
+2) Pruefen, dass das Item genau einmal im eigenen Handelsfenster auftaucht.
+3) Handel NICHT bestaetigen, sondern erst Ergebnis kontrollieren.
+4) Beim Haendler ein guenstiges Ruestungsteil testweise verkaufen.
+5) Ohne Handelsfenster Verbrauchsgegenstand benutzen, BugSack pruefen.
+
+Offen: Der Client-Test ist ausstehend. Bei einem Fehler bitte die komplette
+BugSack-Meldung liefern. Bestehende CurseForge-v0.1.9-Datei unveraendert.

@@ -1,0 +1,30 @@
+AdiBagsForever b0.1.10 r12 - Kampfdiagnose (keine Funktionsaenderung)
+
+Ziel: Nach /reload und im Kampf pruefen, ob B den sicheren Klickhandler erreicht.
+
+1. Spiel vollstaendig neu starten. Tasche im Kampf mit B testen.
+2. Im Kampf /abfcombatdebug eingeben, Ausgabe sichern.
+3. Ausserhalb des Kampfes /reload eingeben, wieder in den Kampf gehen.
+4. B im Kampf einmal druecken, dann /abfcombatdebug eingeben.
+
+WICHTIGE NEUE ZEILEN:
+  Sichere Klicks: eingetroffen=N, angenommen=M
+  Letzter Wechsel: verborgen -> sichtbar (oder umgekehrt)
+
+AUSWERTUNG:
+- eingetroffen bleibt 0: kein Klick im SecureHandler angekommen.
+- eingetroffen steigt, angenommen nicht: Klickrichtung/Down-Up-Bedingung unpassend.
+- angenommen steigt, Wechsel bleibt verborgen: Frame-Show oder anderer Frame-Zustand.
+- Wechsel meldet sichtbar, Fenster bleibt unsichtbar: Fenster wird danach verborgen
+  oder es gibt eine Darstellungsbesonderheit.
+
+Die Werte sind seit dem jeweiligen UI-Start gezaehlt und werden bei /reload zurueckgesetzt.
+Der Diagnose-Code fuehrt keine geschuetzten Aktionen aus normalem Lua aus.
+Die reale Funktionsfaehigkeit muss im Forever-Client getestet werden.
+
+Aenderungen gegenueber r11:
+- Nur geschuetzte Zaehler im vorhandenen _onclick-Handler und lesende Debug-Ausgabe.
+- Keine anderen Secure-Handler, keine Kampf-/Händler-/Handels-/Bank-/Minimap-Aenderungen.
+- Addon-Version und Dateihashmanifest aktualisiert.
+
+Die beiden Addon-Ordner im ZIP sind vollstaendig.

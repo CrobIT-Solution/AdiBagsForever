@@ -1,0 +1,30 @@
+AdiBagsForever b0.1.10 r10 – /reload-Kampfbindung (Testversion)
+
+VOLLPAKET: Enthalten sind AdiBags_FE und AdiBags_FE_Config mit Bibliotheken und Lizenzen.
+
+Einzige funktionale Codeaenderung gegenueber b0.1.10 r8: core/Bags.lua
+- Bei PLAYER_ENTERING_WORLD die bestehende sichere B-Tastenbindung erneut einrichten.
+- Das erfolgt nach dem Laden des UI und nur ausserhalb des Kampfes;
+  falls gerade im Kampf, wird es auf das Kampfende verschoben.
+- Der funktionierende sichere B-Klickhandler bleibt unveraendert.
+- Kein Eingriff in Bank, Handel, Haendler, Minimap, Item-Buttons oder Filter.
+
+BEKANNTE OFFENE PUNKTE:
+- ESC und X koennen die geschuetzte Taschenansicht im Kampf noch nicht schliessen.
+- Blizzard-Taschenleistenbutton kann im Kampf noch nicht oeffnen/schliessen.
+- Ein ESC-Verhalten mit gleichzeitigem GameMenu ausserhalb des Kampfes ist zu pruefen.
+- Haendler-, Handels- und BoE/BoP-Sonderfaelle nicht abschliessend ingame getestet.
+
+TESTREIHENFOLGE:
+1. Beide Addon-Ordner sichern und ersetzen; SavedVariables beibehalten.
+2. WoW starten, B ausserhalb und im Kampf pruefen.
+3. Ohne WoW-Neustart /reload ausfuehren (nur wenn nicht im Kampf).
+4. B ausserhalb und im Kampf erneut pruefen.
+5. Wenn B nach /reload nicht reagiert: /abfcombatdebug vor und nach /reload
+   ausgeben und die Ausgaben vergleichen. BugSack pruefen.
+6. ESC/X/Leisten-Button im Kampf sind weiterhin bekannte Einschraenkungen.
+
+/rl ist kein garantiert eingebauter WoW-Befehl; /reload ist der
+zuverlaessige WoW-Standardbefehl.
+
+KEIN CurseForge-Upload bis zu erfolgreichem Ingame-Test.

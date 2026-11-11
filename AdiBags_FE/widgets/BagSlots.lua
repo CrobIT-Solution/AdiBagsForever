@@ -266,6 +266,7 @@ function bagButtonProto:UpdateLock()
 end
 
 function bagButtonProto:Update()
+	if addon.isForever and InCombatLockdown() then return end
 	local icon = GetInventoryItemTexture("player", self.invSlot)
 	self.hasItem = not not icon
 	if self.hasItem then

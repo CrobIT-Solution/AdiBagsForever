@@ -119,6 +119,13 @@ function buttonProto:OnCreate()
 		-- Right-click item use must be a *secure* button action. Never call
 		-- UseContainerItem directly from our own click handler.
 		self:SetAttribute("type2", "item")
+		-- Secure "item" clicks equip armor at vendors. Reconfigure only
+		-- when the button is acquired or just before a user right-click;
+		-- no per-item merchant event subscriptions are needed.
+		self:UpdateForeverContextAction()
+		-- Check the actual merchant window before a hardware click as well:
+		-- buttons may be pooled or created while the window is already open.
+		self:HookScript("PreClick", self.ForeverPreClick)
 		self:SetScript("PostClick", self.ForeverPostClick)
 		self:SetScript("OnDragStart", self.ForeverDragStart)
 	end
@@ -147,6 +154,7 @@ function buttonProto:OnAcquire(container, bag, slot)
 		self:SetAttribute("item", tostring(bag) .. " " .. tostring(slot))
 		self:SetAttribute("target-bag", bag)
 		self:SetAttribute("target-slot", slot)
+		self:UpdateForeverContextAction()
 	end
 	self:FullUpdate()
 	addon:SendMessage("AdiBags_AcquireButton", self)
@@ -178,9 +186,81 @@ function buttonProto:SplitStack(split)
 	SplitContainerItem(self.bag, self.slot, split)
 end
 
+-- Secure item actions prioritize EQUIPPING armor. While a vendor or player
+-- trade window is open, suppress that action so a right-click cannot equip it.
+-- Context is checked on the actual hardware click, not through extra events.
+function buttonProto:UpdateForeverContextAction()
+	if not addon.isForever or InCombatLockdown() then return end
+	local bag = self.bag
+	local isInventory = bag ~= nil and addon.BAG_IDS.BAGS and addon.BAG_IDS.BAGS[bag] ~= nil
+	local merchantFrame, tradeFrame = _G.MerchantFrame, _G.TradeFrame
+	self.foreverSellAtMerchant = not not (isInventory and merchantFrame and merchantFrame:IsShown())
+	self.foreverTradeWithPlayer = not not (isInventory and not self.foreverSellAtMerchant
+		and tradeFrame and tradeFrame:IsShown())
+	-- 'none' is an explicit secure no-op; nil can fall back to generic actions.
+	self:SetAttribute("type2", (self.foreverSellAtMerchant or self.foreverTradeWithPlayer) and "none" or "item")
+end
+
+function buttonProto:ForeverPreClick(mouseButton)
+	if mouseButton ~= "RightButton" or InCombatLockdown() then return end
+	self:UpdateForeverContextAction()
+end
+
+function buttonProto:ForeverSellMerchantItem()
+	if InCombatLockdown() or not self.foreverSellAtMerchant then return end
+	local merchantFrame = _G.MerchantFrame
+	if not merchantFrame or not merchantFrame:IsShown() then return end
+	if not PickupContainerItem or not _G.PickupMerchantItem then return end
+	if (_G.GetCursorInfo and _G.GetCursorInfo()) or (_G.CursorHasItem and _G.CursorHasItem()) then return end
+	if self:IsLocked() then return end
+	local bag, slot = self.bag, self.slot
+	if bag == nil or slot == nil or not (addon.BAG_IDS.BAGS and addon.BAG_IDS.BAGS[bag] ~= nil) then return end
+	local itemId = GetContainerItemID and GetContainerItemID(bag, slot)
+	if not itemId then return end
+	local vendorPrice = select(11, GetItemInfo(itemId))
+	if not vendorPrice or vendorPrice <= 0 then return end
+	PickupContainerItem(bag, slot)
+	if (_G.CursorHasItem and _G.CursorHasItem()) or (_G.GetCursorInfo and _G.GetCursorInfo() == "item") then
+		_G.PickupMerchantItem(0)
+	end
+end
+
+-- A single intentional right-click places an item in the first empty PLAYER
+-- trade slot (1..6). Never touch the enchantment slot or accept a trade.
+-- If Forever does not expose the trade API, fail closed: use manual drag/drop.
+function buttonProto:ForeverOfferTradeItem()
+	if InCombatLockdown() or not self.foreverTradeWithPlayer then return end
+	local tradeFrame = _G.TradeFrame
+	if not tradeFrame or not tradeFrame:IsShown() then return end
+	if not PickupContainerItem or not _G.ClickTradeButton or not _G.GetTradePlayerItemLink then return end
+	if (_G.GetCursorInfo and _G.GetCursorInfo()) or (_G.CursorHasItem and _G.CursorHasItem()) then return end
+	if self:IsLocked() then return end
+	local bag, slot = self.bag, self.slot
+	if bag == nil or slot == nil or not (addon.BAG_IDS.BAGS and addon.BAG_IDS.BAGS[bag] ~= nil) then return end
+	if not GetContainerItemID or not GetContainerItemID(bag, slot) then return end
+	for tradeSlot = 1, 6 do
+		if not _G.GetTradePlayerItemLink(tradeSlot) then
+			PickupContainerItem(bag, slot)
+			if (_G.GetCursorInfo and _G.GetCursorInfo() == "item")
+				or (_G.CursorHasItem and _G.CursorHasItem()) then
+				_G.ClickTradeButton(tradeSlot)
+			end
+			return
+		end
+	end
+end
+
 -- SecureActionButtonTemplate owns OnClick on Forever. Non-protected left
 -- clicks are handled in PostClick; never reinvoke the secure OnClick via Lua.
 function buttonProto:ForeverPostClick(mouseButton)
+	if mouseButton == "RightButton" then
+		if self.foreverSellAtMerchant then
+			self:ForeverSellMerchantItem()
+		elseif self.foreverTradeWithPlayer then
+			self:ForeverOfferTradeItem()
+		end
+		return
+	end
 	if mouseButton ~= "LeftButton" then return end
 	local bag, slot = self.bag, self.slot
 	if not bag or not slot then return end
@@ -390,13 +470,16 @@ function buttonProto:_OnShow()
 	self:RegisterEvent('UNIT_QUEST_LOG_CHANGED')
 	self:RegisterMessage('AdiBags_UpdateAllButtons', 'FullUpdate')
 	self:RegisterMessage('AdiBags_GlobalLockChanged', 'UpdateLock')
-	self:Update()
+	-- Static slot contents were prepared outside combat. A full Lua update
+	-- may try to modify protected button state and must wait until combat ends.
+	if not addon.isForever or not InCombatLockdown() then self:Update() end
 end
 
 function buttonProto:_OnHide()
 	self:UnregisterAllEvents()
 	self:UnregisterAllMessages()
-	if self.hasStackSplit and self.hasStackSplit == 1 then
+	if self.hasStackSplit and self.hasStackSplit == 1
+		and not (addon.isForever and InCombatLockdown()) then
 		StackSplitFrame:Hide()
 	end
 end
@@ -435,6 +518,7 @@ function buttonProto:CanUpdate()
 end
 
 function buttonProto:FullUpdate()
+	if addon.isForever and InCombatLockdown() then return end
 	local bag, slot = self.bag, self.slot
 	self.itemId = GetContainerItemID(bag, slot)
 	self.itemLink = GetContainerItemLink(bag, slot)
@@ -472,6 +556,7 @@ function buttonProto:UpdateIcon()
 end
 
 function buttonProto:Update()
+	if addon.isForever and InCombatLockdown() then return end
 	if not self:CanUpdate() then return end
 	self.dirty = false
 	self:UpdateIcon()
@@ -765,6 +850,7 @@ function stackProto:OnShow()
 	self:RegisterMessage('AdiBags_UpdateAllButtons', 'Update')
 	self:RegisterMessage('AdiBags_PostContentUpdate')
 	self:RegisterEvent('ITEM_LOCK_CHANGED')
+	if addon.isForever and InCombatLockdown() then return end
 	if self.button then
 		self.button:Show()
 	end
@@ -772,8 +858,10 @@ function stackProto:OnShow()
 end
 
 function stackProto:OnHide()
-	if self.button then
-		self.button:Hide()
+	-- Do not hide secured children just because their parent bag was hidden.
+	if not (addon.isForever and self.container and not self.container:IsShown())
+		and not (addon.isForever and InCombatLockdown()) then
+		if self.button then self.button:Hide() end
 	end
 	self:UnregisterAllEvents()
 	self:UnregisterAllMessages()

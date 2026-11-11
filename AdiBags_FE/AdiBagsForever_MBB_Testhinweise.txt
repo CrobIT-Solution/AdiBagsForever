@@ -1,0 +1,19 @@
+AdiBagsForever b0.1.10 r4 - Nur Minimap-Icon/MBB-Darstellung (Testversion)
+
+Grundlage: b0.1.10 r3. Die Lua-Logik fuer Inventar, Kampf, Bank und Handel bleibt unveraendert.
+
+Korrektur: Standard-Geometrie fuer Minimap-Buttons: 31px Frame, 20px
+Icon/Background mit identischem TOPLEFT-Inset 7/-5; der dekorative
+53px-Rahmen liegt wie beim gaengigen LibDBIcon-Layout am TOPLEFT des Buttons.
+Das bisherige zentrierte 52px-Overlay wurde entfernt.
+
+Der Button bleibt als AdiBags_FEMinimapButton benannt und wird weiterhin
+von MBB erkannt. Klick: nur Konfiguration, niemals Taschen oeffnen.
+
+Ingame noch zu pruefen:
+1. Mit MBB aktiviert: Symbol sitzt mittig im goldenen Ring und in der Leiste.
+2. Ohne MBB: Symbol sitzt am Minimap-Rand und laesst sich ziehen.
+3. Konfiguration oeffnet sich mit Klick, BugSack bleibt leer.
+
+Offene Punkte aus r3: Ruestungsverkauf beim Haendler und Tasche im Kampf
+sind noch nicht abschliessend im Spiel bestaetigt. Nicht auf CurseForge hochladen.

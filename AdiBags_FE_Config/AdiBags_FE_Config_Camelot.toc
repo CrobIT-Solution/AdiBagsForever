@@ -1,11 +1,11 @@
 ## Interface: 16001
 
-## Title: AdiBags_Forever_v0.1.9 - Einstellungen
+## Title: AdiBags_Forever_b0.1.10 - Einstellungen
 ## Notes: Einstellungen fuer AdiBags_FE.
 ## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## Author: Blackiron
-## Version: 0.1.9
-## X-Date: 2026-11-09
+## Version: 0.1.10-beta.12
+## X-Date: 2026-11-10
 ## X-Part-Of: AdiBags_FE
 ## LoadOnDemand: 1
 ## Dependencies: AdiBags_FE
