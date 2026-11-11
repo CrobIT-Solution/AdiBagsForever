@@ -1,0 +1,10 @@
+# User-specific game data and local development leftovers
+WTF/
+**/WTF/
+SavedVariables/
+**/SavedVariables/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
