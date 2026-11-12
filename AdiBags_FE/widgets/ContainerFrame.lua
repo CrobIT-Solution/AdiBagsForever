@@ -456,6 +456,31 @@ function containerProto:CreateDepositButton()
 end
 
 function containerProto:CreateCloseButton()
+	if addon.isForever and not self.isBank then
+		-- The backpack has protected item buttons. Its X needs a secure
+		-- hardware click to close the parent during combat, just like B.
+		local button = CreateFrame("Button", nil, self, "UIPanelButtonTemplate,SecureHandlerClickTemplate")
+		button:SetText("X")
+		button:SetSize(20, 20)
+		button:RegisterForClicks("AnyUp")
+		button:SetFrameRef("bag", self)
+		button:SetAttribute("_onclick", [[
+			if button == "LeftButton" then
+				local bag = self:GetFrameRef("bag")
+				if bag and bag:IsShown() then bag:Hide() end
+			end
+		]])
+		self:AddHeaderWidget(button, 200)
+		addon.SetupTooltip(button, L["Close"], "ANCHOR_TOPLEFT", 0, 8)
+		-- The secure snippet owns hiding. Out of combat only, restore the
+		-- ordinary bag-close notification normally sent by bagProto:Close().
+		button:HookScript("OnClick", function(_, mouseButton)
+			if mouseButton ~= "LeftButton" or InCombatLockdown() or self:IsShown() then return end
+			addon:SendMessage('AdiBags_BagClosed', self.bagObject.bagName, self.bagObject)
+			if self.bagObject.PostClose then self.bagObject:PostClose() end
+		end)
+		return button
+	end
 	return self:CreateModuleButton(
 		"X",
 		200,

@@ -1,0 +1,20 @@
+AdiBagsForever b0.1.10 r13 - X-button combat test (NOT PUBLIC RELEASE)
+Source: CrobIT-Solution/AdiBagsForever @ e9ab4c143699e211b2c74f49780a9db2a79049b5
+
+Only functional changes:
+ - widgets/ContainerFrame.lua: protected secure X close button for the backpack
+ - core/Bags.lua: don't overwrite this secure X click handler
+
+The working B combat handler and post-combat refresh fix remain unchanged.
+ESC and Blizzard bag bar are NOT changed and can still fail in combat.
+
+TEST:
+1. Back up the current AdiBags_FE and AdiBags_FE_Config folders.
+2. Replace BOTH folders from this test archive. Do not delete WTF/SavedVariables.
+3. Fully restart WoW or run /reload outside combat.
+4. Outside combat: B opens/closes; X closes. Check BugSack.
+5. In harmless combat: B opens/closes; X closes. Check BugSack.
+6. After combat: B still works; inventory refreshes normally.
+7. If X is blocked or triggers ADDON_ACTION_FORBIDDEN, restore the backup.
+
+This is an unverified client test package. No guarantee of in-game behavior.

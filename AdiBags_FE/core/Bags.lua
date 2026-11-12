@@ -152,7 +152,8 @@ function bagProto:GetFrame()
 		-- WoW 11.2.0 compatibility: CloseButton might not exist or have different name
 		local closeButton = self.frame.CloseButton or self.frame.closeButton
 			or (self.frame.GetCloseButton and self.frame:GetCloseButton())
-		if closeButton then
+		if closeButton and not (addon.isForever and self.bagName == "Backpack") then
+			-- Forever's backpack X already owns its secure click handler.
 			closeButton:SetScript('OnClick', function() self:Close() end)
 		end
 		addon:SendMessage('AdiBags_BagFrameCreated', self)
