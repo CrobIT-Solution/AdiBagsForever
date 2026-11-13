@@ -1,0 +1,31 @@
+AdiBagsForever b0.1.10 r17 – Isolierter ESC-/Blizzard-Tasten-Test
+Source parent commit: 49fea8b58b8387a4576faea43c3639b6ffdf90f1
+
+User-verified r16: combat B works, X works; ESC and Blizzard bag click do NOT work.
+
+R17:
+* Replaces original MainMenuBarBackpackButton OnClick wrapper with a new
+  separately protected overlay button anchored exactly over the standard
+  Backpack icon, active only while fighting (secure visibility state driver).
+  The original Blizzard button and its scripts are NOT modified.
+* Adds counters for the ESC handler's OnShow/OnHide, binding result, effective
+  ESC binding action, and number of actual ESC secure button clicks.
+* The ESC binding mechanism is otherwise unchanged pending in-game evidence.
+* B secure snippet, X secure handler, inventory, and bank are unchanged.
+* The overlay is deactivated/hidden at addon disable, outside combat.
+* All main/config TOCs report 0.1.10-beta.17.
+
+Test first without using other UI mods:
+1. Back up the two addon folders; retain WTF/SavedVariables.
+2. Install AdiBags_FE and AdiBags_FE_Config from this test ZIP.
+3. Completely restart WoW or /reload OUTSIDE combat.
+4. Check B and X both outside/in combat. If they fail, RESTORE r16.
+5. In a harmless fight, click the default Blizzard backpack icon.
+   Check the categorized bag visibly opens/closes.
+6. While bag is open in combat, press ESC. Verify whether bag closes
+   and whether normal ESC opens Game Menu after bag closed.
+7. If ESC or icon fail, capture /abfcombatdebug IN COMBAT and BugSack.
+   Compare ESC Binding, shown/hidden event counts and click counter.
+8. Note if you use an addon that replaces the Blizzard bag bar.
+
+TEST ONLY, NOT public/CurseForge release, not client verified.

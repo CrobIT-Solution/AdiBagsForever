@@ -232,8 +232,16 @@ do
 	local function ConfigureCombatBagBindings(self)
 		if InCombatLockdown() or not self.foreverCombatToggle then return end
 		local owner = self.foreverCombatToggle
-		-- Independent owners: clearing B never removes the ESC override.
-		if self.foreverBarOwner then self.foreverBarOwner:SetAttribute("enabled", true) end
+		-- Independent owners: clearing B never removes ESC or the bar state driver.
+		if self.foreverBarOverlay then
+			self.foreverBarOverlay:SetAttribute("enabled", true)
+			if not self.foreverBarDriverEnabled and type(_G.RegisterStateDriver) == "function" then
+				local ok = pcall(_G.RegisterStateDriver, self.foreverBarOverlay,
+					"visibility", "[combat] show; hide")
+				self.foreverBarDriverEnabled = ok
+				self.foreverBarStatus = ok and "Overlay aktiv" or "Overlay-Treiber abgelehnt"
+			end
+		end
 		if self.foreverEscOwner then
 			self.foreverEscOwner:SetAttribute("enabled", true)
 			if self.frame and self.frame:IsShown() then
@@ -354,6 +362,7 @@ do
 				esc:SetFrameRef("bag", bagFrame)
 				esc:SetAttribute("enabled", true)
 				esc:SetAttribute("_onclick", [[
+					self:SetAttribute("abfEscClicks", (self:GetAttribute("abfEscClicks") or 0) + 1)
 					if button == "LeftButton" then
 						local bag = self:GetFrameRef("bag")
 						if bag and bag:IsShown() then bag:Hide() end
@@ -362,11 +371,14 @@ do
 				-- Scoped ESC: install only when the bag is shown, remove
 				-- on hide. Never assign ESC globally or permanently.
 				local showOk = pcall(secureWrap, bagFrame, "OnShow", esc, [[
+					control:SetAttribute("abfEscShowEvents", (control:GetAttribute("abfEscShowEvents") or 0) + 1)
 					if control:GetAttribute("enabled") then
-						control:SetBindingClick(true, "ESCAPE", control:GetName(), "LeftButton")
+						local bound = control:SetBindingClick(true, "ESCAPE", control:GetName(), "LeftButton")
+						control:SetAttribute("abfEscBindResult", bound and "OK" or "ABGELEHNT")
 					end
 				]])
 				local hideOk = showOk and pcall(secureWrap, bagFrame, "OnHide", esc, [[
+					control:SetAttribute("abfEscHideEvents", (control:GetAttribute("abfEscHideEvents") or 0) + 1)
 					control:ClearBindings()
 				]])
 				if showOk and hideOk then
@@ -387,39 +399,52 @@ do
 				self.foreverEscStatus = "Taschenfenster ungeschuetzt"
 			end
 
-			local bar = _G.MainMenuBarBackpackButton
-			if bar and bar.IsProtected and bar:IsProtected() then
-				local barOwner = CreateFrame("Frame", addonName .. "CombatBagBarOwner", UIParent, "SecureHandlerBaseTemplate")
-				barOwner:SetFrameRef("bag", bagFrame)
-				barOwner:SetAttribute("enabled", true)
-				-- The default Blizzard click leads to insecure bag hooks.
-				-- Route a real left-click through a secure restricted snippet;
-				-- returning false suppresses only the handled default click.
-				local barOk = pcall(secureWrap, bar, "OnClick", barOwner, [[
-					if button == "LeftButton" and control:GetAttribute("enabled") then
-						local bag = control:GetFrameRef("bag")
-						if bag then
-							-- Some clients emit a mouse down AND up event.
-							-- One physical click must only toggle once.
-							if not down then
-								if bag:IsShown() then bag:Hide() else bag:Show() end
-							end
-							return false
-						end
-					end
-				]])
-				if barOk then
-					self.foreverBarOwner = barOwner
-					self.foreverBarStatus = "aktiv"
-				else
-					self.foreverBarStatus = "Wrapper abgelehnt"
-				end
-			else
-				self.foreverBarStatus = "Button fehlt oder ungeschuetzt"
-			end
+
 		else
 			self.foreverEscStatus = "SecureHandlerWrapScript fehlt"
 			self.foreverBarStatus = "SecureHandlerWrapScript fehlt"
+		end
+
+		-- Combat-only, independent secure mouse receiver above the standard
+		-- Blizzard backpack button. The original Blizzard click script is
+		-- deliberately left untouched: if secure wrapping is unavailable or
+		-- the target is not protected, a normal OnClick hook cannot handle
+		-- Show/Hide safely during combat.
+		local bar = _G.MainMenuBarBackpackButton
+		if bar and bar.IsObjectType and bar:IsObjectType("Button")
+			and not (bar.IsForbidden and bar:IsForbidden())
+			and type(_G.RegisterStateDriver) == "function" then
+			local overlay = CreateFrame("Button", addonName .. "CombatBagBarOverlay",
+				bar, "SecureHandlerClickTemplate,SecureHandlerStateTemplate")
+			overlay:Hide()
+			overlay:SetAllPoints(bar)
+			overlay:SetFrameLevel(bar:GetFrameLevel() + 4)
+			overlay:SetAlpha(0)
+			overlay:EnableMouse(true)
+			overlay:RegisterForClicks("LeftButtonUp")
+			overlay:SetFrameRef("bag", bagFrame)
+			overlay:SetAttribute("enabled", true)
+			overlay:SetAttribute("_onclick", [[
+				self:SetAttribute("abfBarClicks", (self:GetAttribute("abfBarClicks") or 0) + 1)
+				if button == "LeftButton" and self:GetAttribute("enabled") then
+					local bag = self:GetFrameRef("bag")
+					if bag then
+						if bag:IsShown() then bag:Hide() else bag:Show() end
+					end
+				end
+			]])
+			local ok = pcall(_G.RegisterStateDriver, overlay,
+				"visibility", "[combat] show; hide")
+			if ok then
+				self.foreverBarOverlay = overlay
+				self.foreverBarDriverEnabled = true
+				self.foreverBarStatus = "Overlay aktiv"
+			else
+				overlay:Hide()
+				self.foreverBarStatus = "Overlay-Treiber abgelehnt"
+			end
+		else
+			self.foreverBarStatus = "Blizzard-Button oder Zustandstreiber fehlt"
 		end
 
 		-- Read-only diagnostic: no protected calls or binding changes in combat.
@@ -453,9 +478,22 @@ do
 				print("Sichere Klicks: eingetroffen=" .. tostring(btn:GetAttribute("abfDiagInvocations") or 0) .. ", angenommen=" .. tostring(btn:GetAttribute("abfDiagAccepted") or 0))
 				print("Letzter Wechsel: " .. tostring(btn:GetAttribute("abfDiagBefore") or "-") .. " -> " .. tostring(btn:GetAttribute("abfDiagAfter") or "-"))
 			end
-			print("ESC: " .. tostring(self.foreverEscStatus or "noch nicht eingerichtet") ..
-				", Bindung=" .. tostring(_G.GetBindingAction and _G.GetBindingAction("ESCAPE", true) or "?"))
-			print("Blizzard-Taschenbutton: " .. tostring(self.foreverBarStatus or "noch nicht eingerichtet"))
+			local effectiveEsc = _G.GetBindingAction and _G.GetBindingAction("ESCAPE", true) or "?"
+			local expectedEsc = self.foreverEscOwner and
+				("CLICK " .. self.foreverEscOwner:GetName() .. ":LeftButton") or ""
+			print("ESC: " .. tostring(self.foreverEscStatus or "fehlt") ..
+				", Bindung=" .. tostring(effectiveEsc) ..
+				", korrekt=" .. tostring(expectedEsc ~= "" and effectiveEsc == expectedEsc))
+			if self.foreverEscOwner then
+				print("ESC-Handler: gezeigt=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscShowEvents") or 0) ..
+					", verborgen=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscHideEvents") or 0) ..
+					", Klicks=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscClicks") or 0) ..
+					", Binding=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscBindResult") or "-"))
+			end
+			local bl = self.foreverBarOverlay
+			print("Blizzard-Taschenbutton: " .. tostring(self.foreverBarStatus or "fehlt") ..
+				", Overlay sichtbar=" .. tostring(bl and bl:IsVisible()) ..
+				", Klicks=" .. tostring(bl and bl:GetAttribute("abfBarClicks") or 0))
 			print("Bindungs-Setups seit UI-Start: " .. tostring(self.foreverBindingSetupCount or 0))
 			print("Welteintritte seit UI-Start: " .. tostring(self.foreverWorldEntryCount or 0))
 			local expected = btn and ("CLICK " .. btn:GetName() .. ":LeftButton") or ""
@@ -543,8 +581,13 @@ do
 				ClearOverrideBindings(self.foreverEscOwner)
 				self.foreverEscOwner:SetAttribute("enabled", false)
 			end
-			if self.foreverBarOwner then
-				self.foreverBarOwner:SetAttribute("enabled", false)
+			if self.foreverBarOverlay then
+				self.foreverBarOverlay:SetAttribute("enabled", false)
+				if self.foreverBarDriverEnabled and type(_G.UnregisterStateDriver) == "function" then
+					_G.UnregisterStateDriver(self.foreverBarOverlay, "visibility")
+					self.foreverBarDriverEnabled = nil
+				end
+				self.foreverBarOverlay:Hide()
 			end
 		end
 	end
