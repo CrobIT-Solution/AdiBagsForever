@@ -399,7 +399,11 @@ do
 					if button == "LeftButton" and control:GetAttribute("enabled") then
 						local bag = control:GetFrameRef("bag")
 						if bag then
-							if bag:IsShown() then bag:Hide() else bag:Show() end
+							-- Some clients emit a mouse down AND up event.
+							-- One physical click must only toggle once.
+							if not down then
+								if bag:IsShown() then bag:Hide() else bag:Show() end
+							end
 							return false
 						end
 					end
