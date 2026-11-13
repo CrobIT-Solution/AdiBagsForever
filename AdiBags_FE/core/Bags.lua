@@ -232,6 +232,14 @@ do
 	local function ConfigureCombatBagBindings(self)
 		if InCombatLockdown() or not self.foreverCombatToggle then return end
 		local owner = self.foreverCombatToggle
+		-- Independent owners: clearing B never removes the ESC override.
+		if self.foreverBarOwner then self.foreverBarOwner:SetAttribute("enabled", true) end
+		if self.foreverEscOwner then
+			self.foreverEscOwner:SetAttribute("enabled", true)
+			if self.frame and self.frame:IsShown() then
+				SetOverrideBindingClick(self.foreverEscOwner, true, "ESCAPE", self.foreverEscOwner:GetName(), "LeftButton")
+			end
+		end
 		-- Keyboard-generated clicks may arrive on key-down, depending on the
 		-- player's ActionButtonUseKeyDown setting. Handle exactly one edge.
 		local getCVar = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
@@ -331,6 +339,85 @@ do
 			end
 		end)
 		self.foreverCombatBindingListener = listener
+
+		-- Do not replace Blizzard's protected scripts with insecure Lua.
+		-- The extra bar wrapper and the conditional ESC binding each have
+		-- their own secure owner, separate from the tested B binding.
+		local secureWrap = _G.SecureHandlerWrapScript
+		if type(secureWrap) == "function" then
+			if bagFrame:IsProtected() then
+				local esc = CreateFrame("Button", addonName .. "CombatEscapeClose", UIParent, "SecureHandlerClickTemplate")
+				esc:SetSize(1, 1)
+				esc:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 0)
+				esc:SetAlpha(0)
+				esc:RegisterForClicks("AnyDown", "AnyUp")
+				esc:SetFrameRef("bag", bagFrame)
+				esc:SetAttribute("enabled", true)
+				esc:SetAttribute("_onclick", [[
+					if button == "LeftButton" then
+						local bag = self:GetFrameRef("bag")
+						if bag and bag:IsShown() then bag:Hide() end
+					end
+				]])
+				-- Scoped ESC: install only when the bag is shown, remove
+				-- on hide. Never assign ESC globally or permanently.
+				local showOk = pcall(secureWrap, bagFrame, "OnShow", esc, [[
+					if control:GetAttribute("enabled") then
+						control:SetBindingClick(true, "ESCAPE", control:GetName(), "LeftButton")
+					end
+				]])
+				local hideOk = showOk and pcall(secureWrap, bagFrame, "OnHide", esc, [[
+					control:ClearBindings()
+				]])
+				if showOk and hideOk then
+					self.foreverEscOwner = esc
+					self.foreverEscStatus = "aktiv"
+					if bagFrame:IsShown() then
+						SetOverrideBindingClick(esc, true, "ESCAPE", esc:GetName(), "LeftButton")
+					end
+				else
+					-- Roll back any half-installed show wrapper to avoid
+					-- leaving ESC stolen if the hide wrapper could not attach.
+					if showOk and type(_G.SecureHandlerUnwrapScript) == "function" then
+						pcall(_G.SecureHandlerUnwrapScript, bagFrame, "OnShow")
+					end
+					self.foreverEscStatus = "nicht verfuegbar"
+				end
+			else
+				self.foreverEscStatus = "Taschenfenster ungeschuetzt"
+			end
+
+			local bar = _G.MainMenuBarBackpackButton
+			if bar and bar.IsProtected and bar:IsProtected() then
+				local barOwner = CreateFrame("Frame", addonName .. "CombatBagBarOwner", UIParent, "SecureHandlerBaseTemplate")
+				barOwner:SetFrameRef("bag", bagFrame)
+				barOwner:SetAttribute("enabled", true)
+				-- The default Blizzard click leads to insecure bag hooks.
+				-- Route a real left-click through a secure restricted snippet;
+				-- returning false suppresses only the handled default click.
+				local barOk = pcall(secureWrap, bar, "OnClick", barOwner, [[
+					if button == "LeftButton" and control:GetAttribute("enabled") then
+						local bag = control:GetFrameRef("bag")
+						if bag then
+							if bag:IsShown() then bag:Hide() else bag:Show() end
+							return false
+						end
+					end
+				]])
+				if barOk then
+					self.foreverBarOwner = barOwner
+					self.foreverBarStatus = "aktiv"
+				else
+					self.foreverBarStatus = "Wrapper abgelehnt"
+				end
+			else
+				self.foreverBarStatus = "Button fehlt oder ungeschuetzt"
+			end
+		else
+			self.foreverEscStatus = "SecureHandlerWrapScript fehlt"
+			self.foreverBarStatus = "SecureHandlerWrapScript fehlt"
+		end
+
 		-- Read-only diagnostic: no protected calls or binding changes in combat.
 		-- Reports whether the combat-safe key binding was actually installed.
 		addon:RegisterChatCommand("abfcombatdebug", function()
@@ -362,6 +449,9 @@ do
 				print("Sichere Klicks: eingetroffen=" .. tostring(btn:GetAttribute("abfDiagInvocations") or 0) .. ", angenommen=" .. tostring(btn:GetAttribute("abfDiagAccepted") or 0))
 				print("Letzter Wechsel: " .. tostring(btn:GetAttribute("abfDiagBefore") or "-") .. " -> " .. tostring(btn:GetAttribute("abfDiagAfter") or "-"))
 			end
+			print("ESC: " .. tostring(self.foreverEscStatus or "noch nicht eingerichtet") ..
+				", Bindung=" .. tostring(_G.GetBindingAction and _G.GetBindingAction("ESCAPE", true) or "?"))
+			print("Blizzard-Taschenbutton: " .. tostring(self.foreverBarStatus or "noch nicht eingerichtet"))
 			print("Bindungs-Setups seit UI-Start: " .. tostring(self.foreverBindingSetupCount or 0))
 			print("Welteintritte seit UI-Start: " .. tostring(self.foreverWorldEntryCount or 0))
 			local expected = btn and ("CLICK " .. btn:GetName() .. ":LeftButton") or ""
@@ -441,8 +531,17 @@ do
 
 	function backpack:PostDisable()
 		addon:DisableHooks()
-		if self.foreverCombatToggle and not InCombatLockdown() then
-			ClearOverrideBindings(self.foreverCombatToggle)
+		if not InCombatLockdown() then
+			if self.foreverCombatToggle then
+				ClearOverrideBindings(self.foreverCombatToggle)
+			end
+			if self.foreverEscOwner then
+				ClearOverrideBindings(self.foreverEscOwner)
+				self.foreverEscOwner:SetAttribute("enabled", false)
+			end
+			if self.foreverBarOwner then
+				self.foreverBarOwner:SetAttribute("enabled", false)
+			end
 		end
 	end
 end

@@ -1,0 +1,34 @@
+AdiBagsForever b0.1.10 r16 – ESC + Blizzard-Taschenbutton (isolierter Ingame-Test)
+Basis: Commit 0c9188ea13767240231724e9c37bdccaf466640a
+
+Aenderungen:
+- Ein eigener geschuetzter ESC-Handler schliesst die Tasche nur,
+  solange sie geoeffnet ist. Der ESC-Befehl wird beim Schliessen
+  wieder freigegeben; normale Menues sollen damit erhalten bleiben.
+- Blizzard-MainMenuBarBackpackButton: geschuetzter OnClick-Wrapper
+  fuer den Fall, dass der Button geschuetzt ist und das Interface
+  SecureHandlerWrapScript bereitstellt. Kein ungeschuetztes Show/Hide
+  im Kampf. Wenn die Sicherheitsbedingungen fehlen, wird nichts
+  installiert und die Diagnose nennt den Grund.
+- B-Handler und X-Knopf: NICHT veraendert.
+- /abfcombatdebug: zeigt ESC-/Blizzard-Handlerstatus an.
+- Beim Deaktivieren des Addons werden die eigenen Bindungen
+  ausserhalb des Kampfes aufgeraeumt.
+- Vier TOCs auf b0.1.10 r16 angehoben.
+
+TEST (ausdruecklich keine Freigabe als stabile Version):
+1. Beide bisherigen Addon-Ordner sichern. WTF/SavedVariables behalten.
+2. Nur die zwei Addon-Ordner in Interface/AddOns ersetzen.
+3. Vollstaendig neu starten oder /reload AUSSERHALB des Kampfes.
+4. AUSserhalb Kampf B/X/ESC/Blizzard-Taschenbutton pruefen;
+   ESC bei geschlossener Tasche muss das normale Menue oeffnen.
+5. IM Kampf B/X/ESC/Blizzard-Taschenbutton pruefen.
+6. /abfcombatdebug bei Fehler ausgeben, BugSack sichern.
+7. Falls B/X ausfallen oder ADDON_ACTION_BLOCKED auftritt,
+   zu r15 zurueckwechseln und Bericht schicken.
+
+Sicherheit: Keine automatischen Spielhandlungen, keine globalen
+Blizzard-Funktionen ueberschrieben, keine protected frame changes
+aus unsicherem Lua waehrend eines Kampfes.
+Limitation: Verhalten auf dem Forever-Client nicht ausfuehrbar verifiziert.
+Historisches v0.1.9-r1-SHA256-MANIFEST ist KEIN Hash fuer r16.
