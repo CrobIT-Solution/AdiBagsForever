@@ -4,7 +4,7 @@
 ## Notes: Einstellungen fuer AdiBags_FE.
 ## IconTexture: Interface\Icons\INV_Misc_Bag_08
 ## Author: Blackiron
-## Version: 0.1.10-beta.17
+## Version: 0.1.10-beta.18
 ## X-Date: 2026-11-10
 ## X-Part-Of: AdiBags_FE
 ## LoadOnDemand: 1

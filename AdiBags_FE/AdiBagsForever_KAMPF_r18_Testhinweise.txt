@@ -1,0 +1,37 @@
+AdiBagsForever b0.1.10 r18 -- ESC-only secure lifecycle test
+Foundation: e7b42619b2796ad6939f57dad228e3f7c09fc02e
+
+In r17, B, X, and the Blizzard backpack bar button were confirmed working by the user. ESC has not been confirmed and is the only behavioral focus of this patch.
+
+CHANGED:
+- Replaced ESC's SecureHandlerWrapScript registration against the protected
+  backpack frame with a secure child Button inheriting
+  SecureHandlerClickTemplate,SecureHandlerShowHideTemplate.
+- Its restricted _onshow handler overrides ESC only while the parent bag is
+  visible; _onhide clears that binding. The _onclick handler closes the bag.
+- The ESC click uses the configured ActionButtonUseKeyDown edge, consistent
+  with the existing B binding strategy. No permanent escape rebind.
+- On out-of-combat binding refresh, ESC override is cleared if the bag is
+  closed, to avoid trapping the game menu.
+- /abfcombatdebug includes ESC handler visibility and existing counters.
+- Version metadata in all four TOCs advanced to b0.1.10 r18.
+
+UNCHANGED:
+- Exact secure B code and the binding actions.
+- X's secure click code in ContainerFrame.lua.
+- Blizzard-bar combat overlay and state driver.
+- Bank, sorting, items, SavedVariables, settings and licensing.
+- main/develop and CurseForge.
+
+TEST (not yet validated in WoW Forever client):
+1. Back up both current r17 addon folders; keep WTF/SavedVariables.
+2. Install AdiBags_FE and AdiBags_FE_Config from r18.
+3. Fully restart WoW or /reload OUTSIDE combat.
+4. First confirm B, X, Blizzard bar still work.
+5. With bag OPEN during combat, press ESC, see whether bag closes.
+6. With bag CLOSED, press ESC, confirm Game Menu still opens.
+7. If ESC fails, capture /abfcombatdebug WHILE bag is open in combat:
+   note ESC Binding, shown/hidden counters and click count.
+8. If the Game Menu becomes inaccessible, restore r17.
+
+The old SHA-256 manifest is historical v0.1.9 and not an r18 checksum.
