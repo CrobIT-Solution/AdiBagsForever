@@ -263,6 +263,11 @@ do
 			bagFrame.foreverPrewarming = true
 			bagFrame:SetAlpha(0)
 			bagFrame:Show()
+			-- Layout normally waits for OnUpdate. Hiding again in the same tick
+			-- can leave a shown-in-combat frame with no usable size/content.
+			-- Prepare secured item positions and geometry now, outside combat.
+			bagFrame:Layout()
+			if bagFrame.dirtyLayout then bagFrame:Layout() end
 			bagFrame:Hide()
 			bagFrame:SetAlpha(1)
 			bagFrame.foreverPrewarming = nil
@@ -322,6 +327,15 @@ do
 			local version = getMeta and getMeta(addonName, "Version") or "unbekannt"
 			print("|cff33ccffAdiBagsForever|r " .. tostring(version) .. " - " .. status)
 			print("Tasche: " .. (f and (f:IsShown() and "sichtbar" or "verborgen") or "nicht erstellt"))
+			if f then
+				local x, y = f:GetCenter()
+				print("Frame sichtbar=" .. tostring(f:IsVisible()) ..
+					", Alpha=" .. tostring(f:GetAlpha()) ..
+					", effektives Alpha=" .. tostring(f:GetEffectiveAlpha()))
+				print("Frame Groesse=" .. tostring(f:GetWidth()) .. "x" .. tostring(f:GetHeight()) ..
+					", Mitte=" .. tostring(x) .. "/" .. tostring(y) ..
+					", Layout offen=" .. tostring(f.dirtyLayout))
+			end
 			print("Secure-Button: " .. (btn and btn:GetName() or "FEHLT"))
 			if btn then
 				print("Button sichtbar: " .. tostring(btn:IsVisible()) .. ", gezeigt: " .. tostring(btn:IsShown()))

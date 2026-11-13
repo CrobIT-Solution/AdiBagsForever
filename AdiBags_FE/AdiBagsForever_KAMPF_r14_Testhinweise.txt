@@ -1,0 +1,28 @@
+AdiBagsForever b0.1.10 r14 - Prewarm layout / combat visibility test
+Based on commit 15fc28fdbd156ed279714f829478359f24def47e
+
+Investigated: B secure handler accepted clicks and reported IsShown=true,
+but the categorized backpack was not physically visible during combat.
+
+Changed ONLY:
+  - core/Bags.lua: complete pending layout synchronously while the
+    invisible backpack is prewarmed OUTSIDE COMBAT before hiding it
+  - /abfcombatdebug now reports real IsVisible(), alpha, frame
+    width/height, center coordinates and pending layout state
+  - both main/config TOC files updated to 0.1.10-beta.14
+
+No changes to the secure B key toggle or to the separate X fix.
+ESC and Blizzard bag bar remain OPEN. This is a client test, not a public release.
+
+INSTALL:
+  1. Back up both existing addon folders; keep all WTF/SavedVariables.
+  2. Unpack archive and copy its two addon directories AdiBags_FE
+     and AdiBags_FE_Config into World of Warcraft/_forever_/Interface/AddOns.
+  3. Outside combat run /reload.
+  4. Test B out of combat. Enter safe combat and test B.
+  5. If the bag is invisible despite debug showing 'sichtbar',
+     capture /abfcombatdebug while still in combat, and BugSack.
+  6. If failures occur, restore the backed-up test version.
+
+NOTE: Included historical SHA256 manifest corresponds to v0.1.9 r1.
+It is NOT a checksum manifest for this test revision.
