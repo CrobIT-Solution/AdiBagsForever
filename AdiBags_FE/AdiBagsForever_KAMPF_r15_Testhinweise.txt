@@ -1,0 +1,36 @@
+AdiBagsForever b0.1.10 r15 - Kampf-Fensterposition (private Testversion)
+Source parent: 14aee3214d23a8941a85a8a38003932c61e8e512
+
+Code audit:
+- The B secure handler is reached and toggles IsShown, but the bag can be
+  invisible in combat.
+- Core.lua wires AdiBags_BagOpened/Closed to LayoutBags().
+- Bags.lua intentionally does not SendMessage during secure combat clicks.
+- Initial prewarm never applied LayoutBags(), despite LayoutBags() being
+  responsible for the bag's saved anchor and scale.
+- r14 prepared contents/size but did not position the frame.
+
+r15 isolated change:
+- On first combat handler setup OUTSIDE COMBAT, while the backpack is
+  temporarily shown invisibly, apply the existing addon:LayoutBags()
+  positioning path and finish its synchronous prewarm layout.
+- If the resulting frame has zero anchor points, set a temporary safe
+  BOTTOMRIGHT anchor. SavedVariables/positions are not modified.
+- /abfcombatdebug also reports the number of anchors and their first point.
+- No change to the secure B-click snippet or binding choices.
+- X r13 test change is retained, not yet fully client-verified.
+- ESC and Blizzard bag bar are unchanged.
+- Main and config TOCs both read 0.1.10-beta.15.
+
+Test first:
+1) Back up both addon folders, preserve WTF/SavedVariables.
+2) Install both folders; fully restart the game, or /reload OUTSIDE combat.
+3) Without opening the bag normally beforehand, start harmless combat and
+   press B twice. Verify REAL rendered window, not just chat diagnostics.
+4) Outside combat and after /reload, verify normal B and X.
+5) If B toggles in debug but remains invisible, capture /abfcombatdebug
+   during the failure with the anchor, alpha and frame size lines.
+6) Check BugSack for ADDON_ACTION_BLOCKED/FORBIDDEN. Revert on any issue.
+
+No builds, releases, CI, Blizzard API bypass or protected mutations in combat.
+Historical v0.1.9 SHA-256 manifest in repo is NOT a hash for this test ZIP.

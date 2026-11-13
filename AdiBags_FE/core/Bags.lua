@@ -259,13 +259,27 @@ do
 		local bagFrame = self:GetFrame()
 		-- Build the real item buttons, layout and secured slot assignments before
 		-- combat. Hidden protected buttons cannot be initialized in a lockdown.
-		if not bagFrame:IsShown() then
+		local wasHidden = not bagFrame:IsShown()
+		if wasHidden then
 			bagFrame.foreverPrewarming = true
 			bagFrame:SetAlpha(0)
 			bagFrame:Show()
-			-- Layout normally waits for OnUpdate. Hiding again in the same tick
-			-- can leave a shown-in-combat frame with no usable size/content.
-			-- Prepare secured item positions and geometry now, outside combat.
+		end
+		-- Bug analysis: normal out-of-combat opening sends BagOpened, which
+		-- calls LayoutBags and applies the saved anchor. The secure combat B
+		-- click intentionally skips that message, so a freshly prewarmed
+		-- backpack can be IsShown=true but have no position on screen.
+		-- Set the position and scale now, outside combat, while the bag is
+		-- shown (the layout iterator only includes open bag frames).
+		addon:LayoutBags()
+		if bagFrame:GetNumPoints() == 0 then
+			-- Only for missing/corrupt saved positions; never override an
+			-- existing user anchor. No SavedVariables are changed here.
+			bagFrame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -32, 200)
+		end
+		if wasHidden then
+			-- OnUpdate cannot finish this after the hidden prewarm closes.
+			-- Prepare secure item slots and geometry synchronously now.
 			bagFrame:Layout()
 			if bagFrame.dirtyLayout then bagFrame:Layout() end
 			bagFrame:Hide()
@@ -335,6 +349,10 @@ do
 				print("Frame Groesse=" .. tostring(f:GetWidth()) .. "x" .. tostring(f:GetHeight()) ..
 					", Mitte=" .. tostring(x) .. "/" .. tostring(y) ..
 					", Layout offen=" .. tostring(f.dirtyLayout))
+				local point, _, _, offX, offY = f:GetPoint(1)
+				print("Ankerpunkte=" .. tostring(f:GetNumPoints()) .. ", Punkt=" .. tostring(point) ..
+					", Offset=" .. tostring(offX) .. "/" .. tostring(offY) ..
+					", Vollupdate offen=" .. tostring(f.forceLayout))
 			end
 			print("Secure-Button: " .. (btn and btn:GetName() or "FEHLT"))
 			if btn then
