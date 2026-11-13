@@ -94,6 +94,11 @@ end
 
 function bagProto:Open()
 	if not self:CanOpen() then return end
+	-- Forever's secure item buttons protect the surrounding bag frame.
+	-- Only the secure keyboard handler may show it during combat.
+	if addon.isForever and self.bagName == "Backpack" and InCombatLockdown() then
+		return false
+	end
 	local frame = self:GetFrame()
 	if not frame:IsShown() then
 		self:Debug('Open')
@@ -107,6 +112,9 @@ function bagProto:Open()
 end
 
 function bagProto:Close()
+	if addon.isForever and self.bagName == "Backpack" and InCombatLockdown() then
+		return false
+	end
 	if self.frame and self.frame:IsShown() then
 		self:Debug('Close')
 		self.frame:Hide()
@@ -144,7 +152,8 @@ function bagProto:GetFrame()
 		-- WoW 11.2.0 compatibility: CloseButton might not exist or have different name
 		local closeButton = self.frame.CloseButton or self.frame.closeButton
 			or (self.frame.GetCloseButton and self.frame:GetCloseButton())
-		if closeButton then
+		if closeButton and not (addon.isForever and self.bagName == "Backpack") then
+			-- Forever's backpack X already owns its secure click handler.
 			closeButton:SetScript('OnClick', function() self:Close() end)
 		end
 		addon:SendMessage('AdiBags_BagFrameCreated', self)
@@ -216,9 +225,327 @@ do
 	-- L["Backpack"]
 	local backpack = addon:NewBag("Backpack", 10, false, 'AceHook-3.0')
 
+	-- A SecureHandlerClickTemplate owns the combat bag key. A normal Lua
+	-- callback cannot Show/Hide the protected container in combat. All secure
+	-- references and override bindings are configured while outside combat.
+	local combatBindingActions = { "TOGGLEBACKPACK", "OPENALLBAGS", "TOGGLEALLBAGS" }
+	local function ConfigureCombatBagBindings(self)
+		if InCombatLockdown() or not self.foreverCombatToggle then return end
+		local owner = self.foreverCombatToggle
+		-- Independent owners: B bindings never own ESC or the bar overlay.
+		if self.foreverBarOverlay then
+			self.foreverBarOverlay:SetAttribute("enabled", true)
+			if not self.foreverBarDriverEnabled and type(_G.RegisterStateDriver) == "function" then
+				local ok = pcall(_G.RegisterStateDriver, self.foreverBarOverlay,
+					"visibility", "[combat] show; hide")
+				self.foreverBarDriverEnabled = ok
+				self.foreverBarStatus = ok and "Overlay aktiv" or "Overlay-Treiber abgelehnt"
+			end
+		end
+		-- Keyboard-generated clicks may arrive on key-down, depending on the
+		-- player's ActionButtonUseKeyDown setting. Handle exactly one edge.
+		local getCVar = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
+		local useDown = getCVar and not not getCVar("ActionButtonUseKeyDown") or false
+		owner:SetAttribute("clickOnDown", useDown)
+		if self.foreverEscOwner then
+			local esc = self.foreverEscOwner
+			esc:SetAttribute("clickOnDown", useDown)
+			esc:SetAttribute("enabled", true)
+			if self.frame and self.frame:IsShown() then
+				SetOverrideBindingClick(esc, true, "ESCAPE", esc:GetName(), "LeftButton")
+			else
+				-- Never intercept ESC when the bag is closed. This is only
+				-- an out-of-combat safety check; combat cleanup is _onhide.
+				ClearOverrideBindings(esc)
+			end
+		end
+		ClearOverrideBindings(owner)
+		local seen = {}
+		local function BindKey(key)
+			if type(key) == "string" and key ~= "" and not seen[key] then
+				seen[key] = true
+				SetOverrideBindingClick(owner, true, key, owner:GetName(), "LeftButton")
+			end
+		end
+		for _, action in ipairs(combatBindingActions) do
+			local key1, key2 = GetBindingKey(action)
+			-- ipairs({nil, key2}) misses key2 entirely: handle both keys explicitly.
+			BindKey(key1)
+			BindKey(key2)
+		end
+		self.foreverBindingSetupCount = (self.foreverBindingSetupCount or 0) + 1
+	end
+
+	function backpack:InitializeForeverCombatToggle()
+		if not addon.isForever or InCombatLockdown() then return end
+		if self.foreverCombatToggle then return ConfigureCombatBagBindings(self) end
+		local bagFrame = self:GetFrame()
+		-- Build the real item buttons, layout and secured slot assignments before
+		-- combat. Hidden protected buttons cannot be initialized in a lockdown.
+		local wasHidden = not bagFrame:IsShown()
+		if wasHidden then
+			bagFrame.foreverPrewarming = true
+			bagFrame:SetAlpha(0)
+			bagFrame:Show()
+		end
+		-- Bug analysis: normal out-of-combat opening sends BagOpened, which
+		-- calls LayoutBags and applies the saved anchor. The secure combat B
+		-- click intentionally skips that message, so a freshly prewarmed
+		-- backpack can be IsShown=true but have no position on screen.
+		-- Set the position and scale now, outside combat, while the bag is
+		-- shown (the layout iterator only includes open bag frames).
+		addon:LayoutBags()
+		if bagFrame:GetNumPoints() == 0 then
+			-- Only for missing/corrupt saved positions; never override an
+			-- existing user anchor. No SavedVariables are changed here.
+			bagFrame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -32, 200)
+		end
+		if wasHidden then
+			-- OnUpdate cannot finish this after the hidden prewarm closes.
+			-- Prepare secure item slots and geometry synchronously now.
+			bagFrame:Layout()
+			if bagFrame.dirtyLayout then bagFrame:Layout() end
+			bagFrame:Hide()
+			bagFrame:SetAlpha(1)
+			bagFrame.foreverPrewarming = nil
+		end
+		local owner = CreateFrame("Button", addonName .. "CombatBagToggle", UIParent, "SecureHandlerClickTemplate")
+		owner:SetSize(1, 1)
+		owner:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 0)
+		owner:SetAlpha(0)
+		-- WoW can dispatch bound clicks on key-down or key-up. The old
+		-- AnyUp-only registration silently dropped key-down bindings.
+		owner:RegisterForClicks("AnyDown", "AnyUp")
+		owner:SetFrameRef("bag", bagFrame)
+		owner:SetAttribute("_onclick", [[
+			-- Diagnostic counters run entirely inside Blizzard's secure handler.
+			-- They do not change click routing or the bag toggle itself.
+			self:SetAttribute("abfDiagInvocations", (self:GetAttribute("abfDiagInvocations") or 0) + 1)
+			if (not not down) == self:GetAttribute("clickOnDown") then
+				self:SetAttribute("abfDiagAccepted", (self:GetAttribute("abfDiagAccepted") or 0) + 1)
+				local bag = self:GetFrameRef("bag")
+				if bag then
+					self:SetAttribute("abfDiagBefore", bag:IsShown() and "sichtbar" or "verborgen")
+					if bag:IsShown() then bag:Hide() else bag:Show() end
+					self:SetAttribute("abfDiagAfter", bag:IsShown() and "sichtbar" or "verborgen")
+				else
+					self:SetAttribute("abfDiagAfter", "Bag-Referenz fehlt")
+				end
+			end
+		]])
+		owner:HookScript("OnClick", function()
+			-- Do not trigger layout or unsecured bag functions in combat.
+			if InCombatLockdown() then return end
+			if bagFrame:IsShown() then
+				addon:SendMessage("AdiBags_BagOpened", self.bagName, self)
+			else
+				addon:SendMessage("AdiBags_BagClosed", self.bagName, self)
+			end
+		end)
+		self.foreverCombatToggle = owner
+		local listener = CreateFrame("Frame")
+		listener:RegisterEvent("UPDATE_BINDINGS")
+		listener:RegisterEvent("PLAYER_REGEN_ENABLED")
+		listener:RegisterEvent("CVAR_UPDATE")
+		listener:SetScript("OnEvent", function(_, event, cvar)
+			if event == "CVAR_UPDATE" and cvar ~= "ActionButtonUseKeyDown" then return end
+			if self:IsEnabled() and not InCombatLockdown() then
+				ConfigureCombatBagBindings(self)
+			end
+		end)
+		self.foreverCombatBindingListener = listener
+
+		-- Do not replace Blizzard's protected scripts with insecure Lua.
+		-- The extra bar wrapper and the conditional ESC binding each have
+		-- their own secure owner, separate from the tested B binding.
+		-- ESC: own a secure show/hide handler directly on a child of the
+		-- backpack. The old WrapScript path could fail on an implicitly
+		-- protected bag frame and silently leave ESC unbound.
+		-- A child's effective OnShow/OnHide follows its parent's visibility.
+		-- Both binding changes are secure and require no insecure combat Lua.
+		local esc = CreateFrame("Button", addonName .. "CombatEscapeClose",
+			bagFrame, "SecureHandlerClickTemplate,SecureHandlerShowHideTemplate")
+		esc:SetSize(1, 1)
+		esc:SetPoint("TOPLEFT", bagFrame, "TOPLEFT", -20, 0)
+		esc:SetAlpha(0)
+		esc:RegisterForClicks("AnyDown", "AnyUp")
+		esc:SetFrameRef("bag", bagFrame)
+		esc:SetAttribute("enabled", true)
+		local getCVarEsc = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
+		esc:SetAttribute("clickOnDown", getCVarEsc and not not getCVarEsc("ActionButtonUseKeyDown") or false)
+		esc:SetAttribute("_onshow", [[
+			self:SetAttribute("abfEscShowEvents", (self:GetAttribute("abfEscShowEvents") or 0) + 1)
+			if self:GetAttribute("enabled") then
+				local ok = self:SetBindingClick(true, "ESCAPE", self:GetName(), "LeftButton")
+				self:SetAttribute("abfEscBindResult", ok and "OK" or "ABGELEHNT")
+			end
+		]])
+		esc:SetAttribute("_onhide", [[
+			self:SetAttribute("abfEscHideEvents", (self:GetAttribute("abfEscHideEvents") or 0) + 1)
+			self:ClearBindings()
+		]])
+		esc:SetAttribute("_onclick", [[
+			self:SetAttribute("abfEscClicks", (self:GetAttribute("abfEscClicks") or 0) + 1)
+			if button == "LeftButton" and (not not down) == self:GetAttribute("clickOnDown") then
+				local bag = self:GetFrameRef("bag")
+				if bag and bag:IsShown() then
+					bag:Hide()
+				end
+			end
+		]])
+		self.foreverEscOwner = esc
+		self.foreverEscStatus = "ShowHide-Handler"
+		-- The bag can already be open when the handler is created.
+		if bagFrame:IsShown() then
+			SetOverrideBindingClick(esc, true, "ESCAPE", esc:GetName(), "LeftButton")
+		end
+
+		-- Combat-only, independent secure mouse receiver above the standard
+		-- Blizzard backpack button. The original Blizzard click script is
+		-- deliberately left untouched: if secure wrapping is unavailable or
+		-- the target is not protected, a normal OnClick hook cannot handle
+		-- Show/Hide safely during combat.
+		local bar = _G.MainMenuBarBackpackButton
+		if bar and bar.IsObjectType and bar:IsObjectType("Button")
+			and not (bar.IsForbidden and bar:IsForbidden())
+			and type(_G.RegisterStateDriver) == "function" then
+			local overlay = CreateFrame("Button", addonName .. "CombatBagBarOverlay",
+				bar, "SecureHandlerClickTemplate,SecureHandlerStateTemplate")
+			overlay:Hide()
+			overlay:SetAllPoints(bar)
+			overlay:SetFrameLevel(bar:GetFrameLevel() + 4)
+			overlay:SetAlpha(0)
+			overlay:EnableMouse(true)
+			overlay:RegisterForClicks("LeftButtonUp")
+			overlay:SetFrameRef("bag", bagFrame)
+			overlay:SetAttribute("enabled", true)
+			overlay:SetAttribute("_onclick", [[
+				self:SetAttribute("abfBarClicks", (self:GetAttribute("abfBarClicks") or 0) + 1)
+				if button == "LeftButton" and self:GetAttribute("enabled") then
+					local bag = self:GetFrameRef("bag")
+					if bag then
+						if bag:IsShown() then bag:Hide() else bag:Show() end
+					end
+				end
+			]])
+			local ok = pcall(_G.RegisterStateDriver, overlay,
+				"visibility", "[combat] show; hide")
+			if ok then
+				self.foreverBarOverlay = overlay
+				self.foreverBarDriverEnabled = true
+				self.foreverBarStatus = "Overlay aktiv"
+			else
+				overlay:Hide()
+				self.foreverBarStatus = "Overlay-Treiber abgelehnt"
+			end
+		else
+			self.foreverBarStatus = "Blizzard-Button oder Zustandstreiber fehlt"
+		end
+
+		-- Read-only diagnostic: no protected calls or binding changes in combat.
+		-- Reports whether the combat-safe key binding was actually installed.
+		addon:RegisterChatCommand("abfcombatdebug", function()
+			-- Read-only diagnostic. Never install, clear or modify bindings here.
+			local f, btn = self.frame, self.foreverCombatToggle
+			local status = InCombatLockdown() and "Kampf" or "kein Kampf"
+			local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
+			local version = getMeta and getMeta(addonName, "Version") or "unbekannt"
+			print("|cff33ccffAdiBagsForever|r " .. tostring(version) .. " - " .. status)
+			print("Tasche: " .. (f and (f:IsShown() and "sichtbar" or "verborgen") or "nicht erstellt"))
+			if f then
+				local x, y = f:GetCenter()
+				print("Frame sichtbar=" .. tostring(f:IsVisible()) ..
+					", Alpha=" .. tostring(f:GetAlpha()) ..
+					", effektives Alpha=" .. tostring(f:GetEffectiveAlpha()))
+				print("Frame Groesse=" .. tostring(f:GetWidth()) .. "x" .. tostring(f:GetHeight()) ..
+					", Mitte=" .. tostring(x) .. "/" .. tostring(y) ..
+					", Layout offen=" .. tostring(f.dirtyLayout))
+				local point, _, _, offX, offY = f:GetPoint(1)
+				print("Ankerpunkte=" .. tostring(f:GetNumPoints()) .. ", Punkt=" .. tostring(point) ..
+					", Offset=" .. tostring(offX) .. "/" .. tostring(offY) ..
+					", Vollupdate offen=" .. tostring(f.forceLayout))
+			end
+			print("Secure-Button: " .. (btn and btn:GetName() or "FEHLT"))
+			if btn then
+				print("Button sichtbar: " .. tostring(btn:IsVisible()) .. ", gezeigt: " .. tostring(btn:IsShown()))
+				local getCVar = (C_CVar and C_CVar.GetCVarBool) or _G.GetCVarBool
+				print("Klick beim Druecken (Button/CVar): " .. tostring(btn:GetAttribute("clickOnDown")) .. "/" .. tostring(getCVar and getCVar("ActionButtonUseKeyDown")))
+				print("Sichere Klicks: eingetroffen=" .. tostring(btn:GetAttribute("abfDiagInvocations") or 0) .. ", angenommen=" .. tostring(btn:GetAttribute("abfDiagAccepted") or 0))
+				print("Letzter Wechsel: " .. tostring(btn:GetAttribute("abfDiagBefore") or "-") .. " -> " .. tostring(btn:GetAttribute("abfDiagAfter") or "-"))
+			end
+			local effectiveEsc = _G.GetBindingAction and _G.GetBindingAction("ESCAPE", true) or "?"
+			local expectedEsc = self.foreverEscOwner and
+				("CLICK " .. self.foreverEscOwner:GetName() .. ":LeftButton") or ""
+			print("ESC: " .. tostring(self.foreverEscStatus or "fehlt") ..
+				", Bindung=" .. tostring(effectiveEsc) ..
+				", korrekt=" .. tostring(expectedEsc ~= "" and effectiveEsc == expectedEsc))
+			if self.foreverEscOwner then
+				print("ESC-Handler: gezeigt=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscShowEvents") or 0) ..
+					", verborgen=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscHideEvents") or 0) ..
+					", Klicks=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscClicks") or 0) ..
+					", Binding=" .. tostring(self.foreverEscOwner:GetAttribute("abfEscBindResult") or "-") ..
+					", sichtbar=" .. tostring(self.foreverEscOwner:IsVisible()))
+			end
+			local bl = self.foreverBarOverlay
+			print("Blizzard-Taschenbutton: " .. tostring(self.foreverBarStatus or "fehlt") ..
+				", Overlay sichtbar=" .. tostring(bl and bl:IsVisible()) ..
+				", Klicks=" .. tostring(bl and bl:GetAttribute("abfBarClicks") or 0))
+			print("Bindungs-Setups seit UI-Start: " .. tostring(self.foreverBindingSetupCount or 0))
+			print("Welteintritte seit UI-Start: " .. tostring(self.foreverWorldEntryCount or 0))
+			local expected = btn and ("CLICK " .. btn:GetName() .. ":LeftButton") or ""
+			local anyKey = false
+			for _, action in ipairs(combatBindingActions) do
+				local first, second = GetBindingKey(action)
+				for _, key in ipairs({first or "", second or ""}) do
+					if key ~= "" then
+						anyKey = true
+						local effective = _G.GetBindingAction and _G.GetBindingAction(key, true) or "unbekannt"
+						local normal = _G.GetBindingAction and _G.GetBindingAction(key, false) or "unbekannt"
+						local matches = expected ~= "" and effective == expected
+						print(action .. " [" .. key .. "]: " .. (matches and "OK" or "ABWEICHUNG"))
+						print("  normal=" .. tostring(normal) .. ", aktiv=" .. tostring(effective))
+					end
+				end
+			end
+			if not anyKey then print("Keine Tasten fuer Taschenaktionen eingetragen") end
+		end)
+		ConfigureCombatBagBindings(self)
+	end
+
+	local function DeferForeverCombatSetup(self)
+		if not self:IsEnabled() then return end
+		if InCombatLockdown() then
+			if self.foreverPendingCombatSetup then return end
+			local listener = CreateFrame('Frame')
+			self.foreverPendingCombatSetup = listener
+			listener:RegisterEvent('PLAYER_REGEN_ENABLED')
+			listener:SetScript('OnEvent', function(frame)
+				frame:UnregisterEvent('PLAYER_REGEN_ENABLED')
+				self.foreverPendingCombatSetup = nil
+				C_Timer.After(0, function() DeferForeverCombatSetup(self) end)
+			end)
+			return
+		end
+		self:InitializeForeverCombatToggle()
+	end
+
+	-- WoW drops override key bindings on /reload. Reapply the existing
+	-- combat-safe binding after world entry, when the UI has reloaded.
+	-- No new key handler or global key remapping is created.
+	function backpack:ForeverRebindOnWorldEntry()
+		self.foreverWorldEntryCount = (self.foreverWorldEntryCount or 0) + 1
+		C_Timer.After(0, function() DeferForeverCombatSetup(self) end)
+	end
+
 	function backpack:PostEnable()
 		addon:EnableHooks()
 		self:RegisterMessage('AdiBags_InteractingWindowChanged')
+		if addon.isForever then
+			self:RegisterEvent('PLAYER_ENTERING_WORLD', 'ForeverRebindOnWorldEntry')
+			-- PostEnable is called before other filter modules have OnEnabled.
+			-- Prewarming Show() here used to crash Junk.lua (prefs == nil).
+			C_Timer.After(0, function() DeferForeverCombatSetup(self) end)
+		end
 	end
 
 	function backpack:AdiBags_InteractingWindowChanged(event, window)
@@ -242,6 +569,23 @@ do
 
 	function backpack:PostDisable()
 		addon:DisableHooks()
+		if not InCombatLockdown() then
+			if self.foreverCombatToggle then
+				ClearOverrideBindings(self.foreverCombatToggle)
+			end
+			if self.foreverEscOwner then
+				ClearOverrideBindings(self.foreverEscOwner)
+				self.foreverEscOwner:SetAttribute("enabled", false)
+			end
+			if self.foreverBarOverlay then
+				self.foreverBarOverlay:SetAttribute("enabled", false)
+				if self.foreverBarDriverEnabled and type(_G.UnregisterStateDriver) == "function" then
+					_G.UnregisterStateDriver(self.foreverBarOverlay, "visibility")
+					self.foreverBarDriverEnabled = nil
+				end
+				self.foreverBarOverlay:Hide()
+			end
+		end
 	end
 end
 

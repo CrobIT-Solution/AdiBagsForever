@@ -369,7 +369,12 @@ local function GetOptions()
 		name = addonName..' DEV',
 		--@end-debug@]===]
 		--@non-debug@
-		name = addonName..' v1.10.29',
+		name = (function()
+			if not addon.isForever then return addonName..' v1.10.29' end
+			local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+			local version = getMeta and getMeta(addonName, 'Version')
+			return 'AdiBagsForever' .. (type(version) == 'string' and version ~= '' and (' v'..version) or '')
+		end)(),
 		--@end-non-debug@
 		type = 'group',
 		handler = addon:GetOptionHandler(addon),

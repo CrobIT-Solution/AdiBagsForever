@@ -110,12 +110,19 @@ function sectionProto:OnCreate()
 end
 
 function sectionProto:OnShow()
+	-- SecureActionButtonTemplate children cannot be shown from addon Lua
+	-- during combat. Keep their pre-combat visible state instead.
+	if addon.isForever and InCombatLockdown() then return end
 	for button in pairs(self.buttons) do
 		button:Show()
 	end
 end
 
 function sectionProto:OnHide()
+	-- When only the whole container closes, preserve explicit visibility of
+	-- secured children. Their parent already hides them implicitly.
+	if addon.isForever and self.container and not self.container:IsShown() then return end
+	if addon.isForever and InCombatLockdown() then return end
 	for button in pairs(self.buttons) do
 		button:Hide()
 	end
@@ -372,6 +379,7 @@ end
 local CompareButtons
 local buttonOrder = {}
 function sectionProto:FullLayout()
+	if addon.isForever and InCombatLockdown() then return end
 	if not self:IsVisible() then
 		return
 	elseif self:IsCollapsed() then

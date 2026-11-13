@@ -456,6 +456,31 @@ function containerProto:CreateDepositButton()
 end
 
 function containerProto:CreateCloseButton()
+	if addon.isForever and not self.isBank then
+		-- The backpack has protected item buttons. Its X needs a secure
+		-- hardware click to close the parent during combat, just like B.
+		local button = CreateFrame("Button", nil, self, "UIPanelButtonTemplate,SecureHandlerClickTemplate")
+		button:SetText("X")
+		button:SetSize(20, 20)
+		button:RegisterForClicks("AnyUp")
+		button:SetFrameRef("bag", self)
+		button:SetAttribute("_onclick", [[
+			if button == "LeftButton" then
+				local bag = self:GetFrameRef("bag")
+				if bag and bag:IsShown() then bag:Hide() end
+			end
+		]])
+		self:AddHeaderWidget(button, 200)
+		addon.SetupTooltip(button, L["Close"], "ANCHOR_TOPLEFT", 0, 8)
+		-- The secure snippet owns hiding. Out of combat only, restore the
+		-- ordinary bag-close notification normally sent by bagProto:Close().
+		button:HookScript("OnClick", function(_, mouseButton)
+			if mouseButton ~= "LeftButton" or InCombatLockdown() or self:IsShown() then return end
+			addon:SendMessage('AdiBags_BagClosed', self.bagObject.bagName, self.bagObject)
+			if self.bagObject.PostClose then self.bagObject:PostClose() end
+		end)
+		return button
+	end
 	return self:CreateModuleButton(
 		"X",
 		200,
@@ -642,7 +667,16 @@ end
 
 function containerProto:OnShow()
 	self:Debug('OnShow')
-	PlaySound(self.isBank and SOUNDKIT.IG_MAINMENU_OPEN or SOUNDKIT.IG_BACKPACK_OPEN)
+	if addon.isForever and InCombatLockdown() then
+		-- Show is performed by the secure keyboard handler. Do not run layout
+		-- or create/move secured item buttons from an insecure OnShow callback.
+		self.foreverDeferredUpdate = true
+		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'ForeverRefreshAfterCombat')
+		return
+	end
+	if not self.foreverPrewarming then
+		PlaySound(self.isBank and SOUNDKIT.IG_MAINMENU_OPEN or SOUNDKIT.IG_BACKPACK_OPEN)
+	end
 	self:RegisterEvent('EQUIPMENT_SWAP_PENDING', "PauseUpdates")
 	self:RegisterEvent('EQUIPMENT_SWAP_FINISHED', "ResumeUpdates")
 	self:RegisterEvent('AUCTION_MULTISELL_START', "PauseUpdates")
@@ -654,11 +688,21 @@ function containerProto:OnShow()
 end
 
 function containerProto:OnHide()
+	if addon.isForever and InCombatLockdown() then
+		-- Keep PLAYER_REGEN_ENABLED alive until combat ends. UnregisterAllEvents()
+		-- here would discard the deferred refresh registered by OnShow.
+		self:PauseUpdates()
+		self.foreverDeferredUpdate = true
+		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'ForeverRefreshAfterCombat')
+		return
+	end
 	if self.isReagentBank then
 		self:ShowReagentTab(false)
 	end
 	containerParentProto.OnHide(self)
-	PlaySound(self.isBank and SOUNDKIT.IG_MAINMENU_CLOSE or SOUNDKIT.IG_BACKPACK_CLOSE)
+	if not self.foreverPrewarming then
+		PlaySound(self.isBank and SOUNDKIT.IG_MAINMENU_CLOSE or SOUNDKIT.IG_BACKPACK_CLOSE)
+	end
 	self:PauseUpdates()
 	self:UnregisterAllEvents()
 	self:UnregisterAllMessages()
@@ -798,6 +842,10 @@ function containerProto:AddBottomWidget(widget, side, order, height, xOffset, yO
 end
 
 function containerProto:OnLayout()
+	if addon.isForever and InCombatLockdown() then
+		self.forceLayout = true
+		return
+	end
 	self:Debug('OnLayout Start')
 	local hlr, hrr = self.HeaderLeftRegion, self.HeaderRightRegion
 	local blr, brr = self.BottomLeftRegion, self.BottomRightRegion
@@ -1147,7 +1195,14 @@ function containerProto:ForeverRefreshAfterCombat()
 	self:UnregisterEvent('PLAYER_REGEN_ENABLED')
 	self.foreverDeferredUpdate = nil
 	if self:IsShown() then
-		self:RefreshContents()
+		-- The initial combat OnShow intentionally skipped initialization.
+		if self.paused then self:ResumeUpdates() else self:RefreshContents() end
+		self:RequestLayout()
+	else
+		-- Normal OnHide removes these subscriptions. During combat that
+		-- cleanup is delayed so the post-combat event can still arrive.
+		self:UnregisterAllEvents()
+		self:UnregisterAllMessages()
 	end
 end
 
@@ -1430,6 +1485,12 @@ function containerProto:LayoutSections(maxHeight, columnWidth, minWidth, section
 end
 
 function containerProto:FullUpdate()
+	if addon.isForever and InCombatLockdown() then
+		self.forceLayout = true
+		self.foreverDeferredUpdate = true
+		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'ForeverRefreshAfterCombat')
+		return
+	end
 	self:Debug('FullUpdate', self:CanUpdate(), self.minWidth)
 	if not self:CanUpdate() or not self.minWidth then
 		self.forceLayout = true
