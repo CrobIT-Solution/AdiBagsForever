@@ -318,7 +318,9 @@ do
 			-- Read-only diagnostic. Never install, clear or modify bindings here.
 			local f, btn = self.frame, self.foreverCombatToggle
 			local status = InCombatLockdown() and "Kampf" or "kein Kampf"
-			print("|cff33ccffAdiBagsForever|r b0.1.10 r12 - " .. status)
+			local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
+			local version = getMeta and getMeta(addonName, "Version") or "unbekannt"
+			print("|cff33ccffAdiBagsForever|r " .. tostring(version) .. " - " .. status)
 			print("Tasche: " .. (f and (f:IsShown() and "sichtbar" or "verborgen") or "nicht erstellt"))
 			print("Secure-Button: " .. (btn and btn:GetName() or "FEHLT"))
 			if btn then
